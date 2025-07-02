@@ -2,6 +2,7 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app/wrappers'
+import { Path } from 'three'
 
 export default defineConfig((/* ctx */) => {
   return {
@@ -40,6 +41,8 @@ export default defineConfig((/* ctx */) => {
         node: 'node20'
       },
 
+
+
       vueRouterMode: 'hash', // available values: 'hash', 'history'
       // vueRouterBase,
       // vueDevtools,
@@ -71,6 +74,12 @@ export default defineConfig((/* ctx */) => {
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true
+        }
+      },
       // https: true,
       open: true // opens browser window automatically
     },
