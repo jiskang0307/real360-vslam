@@ -19,23 +19,14 @@ export function addFloorplanToScene({
   let resizeHandle = null
   let moveArrowX = null
   let moveArrowY = null
-  let rotateCircleX = null
-  let rotateCircleY = null
   let rotateCircleZ = null
-  let startScale = new THREE.Vector2(1, 1)
-  let startMouse = new THREE.Vector2()
-  let imageAspect = 1
-  let originalWidth = 1
-  let originalHeight = 1
+  let rotateCircleY = null
 
   const textureLoader = new THREE.TextureLoader()
   textureLoader.load(texturePath, (texture) => {
-    const img = texture.image
-    imageAspect = img.naturalWidth / img.naturalHeight
-    const height = 10
-    const width = height * imageAspect
-    originalWidth = width
-    originalHeight = height
+    const aspect = texture.image.width / texture.image.height
+    const height = 2
+    const width = height * aspect
 
     const geometry = new THREE.PlaneGeometry(width, height)
     const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true })
@@ -43,37 +34,30 @@ export function addFloorplanToScene({
     imagePlane.position.set(0, 0, pointCloudMinZ - pointCloudCenter.z)
     scene.add(imagePlane)
 
-    const handleGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3)
+    const handleGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1)
 
     resizeHandle = new THREE.Mesh(handleGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }))
     resizeHandle.position.set(width / 2, -height / 2, 0.01)
     imagePlane.add(resizeHandle)
 
-    moveArrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0.01), 5, 0x00ff00)
-    moveArrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0.01), 3, 0x0000ff)
+    moveArrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0.01), 1, 0x00ff00)
+    moveArrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0.01), 1, 0x0000ff)
     imagePlane.add(moveArrowX)
     imagePlane.add(moveArrowY)
 
-    const ringGeoX = new THREE.RingGeometry(1.6, 1.8, 64)
-    const ringMatX = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide })
-    rotateCircleX = new THREE.Mesh(ringGeoX, ringMatX)
-    rotateCircleX.rotation.set(0, 0, Math.PI / 2)
-    rotateCircleX.position.set(0, 0, 0.01)
-    imagePlane.add(rotateCircleX)
-
-    const ringGeoY = new THREE.RingGeometry(1.6, 1.8, 64)
-    const ringMatY = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide })
-    rotateCircleY = new THREE.Mesh(ringGeoY, ringMatY)
-    rotateCircleY.rotation.set(0, Math.PI / 2, 0)
-    rotateCircleY.position.set(0, 0, 0.01)
-    imagePlane.add(rotateCircleY)
-
-    const ringGeoZ = new THREE.RingGeometry(1.6, 1.8, 64)
-    const ringMatZ = new THREE.MeshBasicMaterial({ color: 0x0000ff, side: THREE.DoubleSide })
+    const ringGeoZ = new THREE.RingGeometry(0.6, 0.65, 64)
+    const ringMatZ = new THREE.MeshBasicMaterial({ color: 0xff00ff, side: THREE.DoubleSide })
     rotateCircleZ = new THREE.Mesh(ringGeoZ, ringMatZ)
-    rotateCircleZ.rotation.set(Math.PI / 2, 0, 0)
+    rotateCircleZ.rotation.x = Math.PI / 2 // XY 평면 기준
     rotateCircleZ.position.set(0, 0, 0.01)
     imagePlane.add(rotateCircleZ)
+
+    const ringGeoY = new THREE.RingGeometry(0.7, 0.75, 64)
+    const ringMatY = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide })
+    rotateCircleY = new THREE.Mesh(ringGeoY, ringMatY)
+    rotateCircleY.rotation.y = Math.PI / 2 // Y축 회전 기준
+    rotateCircleY.position.set(0, 0, 0.01)
+    imagePlane.add(rotateCircleY)
 
     updateToolVisibility()
   })
@@ -95,26 +79,18 @@ export function addFloorplanToScene({
       if (moveArrowY) interactiveObjects.push(moveArrowY.cone)
     }
     if (draggingMode === 'rotate') {
-      if (rotateCircleX) interactiveObjects.push(rotateCircleX)
       if (rotateCircleZ) interactiveObjects.push(rotateCircleZ)
       if (rotateCircleY) interactiveObjects.push(rotateCircleY)
     }
 
     const intersects = raycaster.intersectObjects(interactiveObjects)
-      if (intersects.length > 0) {
-        dragging = true
-        dragTarget = intersects[0].object
-        controls.enabled = false
-        prevMouse.x = event.clientX
-        prevMouse.y = event.clientY
-
-        // 초기 마우스 위치와 스케일 저장
-        startMouse.set(event.clientX, event.clientY)
-        startScale.set(imagePlane.scale.x, imagePlane.scale.y)
-        if (imagePlane) {
-          startScale.set(imagePlane.scale.x, imagePlane.scale.y)
-        }
-      }
+    if (intersects.length > 0) {
+      dragging = true
+      dragTarget = intersects[0].object
+      controls.enabled = false
+      prevMouse.x = event.clientX
+      prevMouse.y = event.clientY
+    }
   })
 
   renderer.domElement.addEventListener('pointerup', () => {
@@ -129,30 +105,15 @@ export function addFloorplanToScene({
       const dy = event.clientY - prevMouse.y
 
       if (draggingMode === 'resize') {
-        const delta = event.clientX - startMouse.x
-        const scaleFactor = 1 + delta * 0.01
-
-        const newScaleX = Math.max(0.1, startScale.x * scaleFactor)
-        const newScaleY = Math.max(0.1, startScale.y * scaleFactor)
-
-        imagePlane.scale.set(newScaleX, newScaleY, 1)
-        updateResizeHandlePosition()
+        imagePlane.scale.x += dx * 0.01
+        imagePlane.scale.y -= dy * 0.01
+        imagePlane.scale.z = 1
       } else if (draggingMode === 'move') {
-        if (dragTarget === moveArrowX.cone) {
-          const dir = new THREE.Vector3(1, 0, 0)
-          dir.applyQuaternion(imagePlane.quaternion)
-          imagePlane.position.addScaledVector(dir, dx * 0.05)
-        }
-
-        if (dragTarget === moveArrowY.cone) {
-          const dir = new THREE.Vector3(0, 1, 0)
-          dir.applyQuaternion(imagePlane.quaternion)
-          imagePlane.position.addScaledVector(dir, -dy * 0.05)
-        }
+        if (dragTarget === moveArrowX.cone) imagePlane.position.x += dx * 0.01
+        if (dragTarget === moveArrowY.cone) imagePlane.position.y -= dy * 0.01
       } else if (draggingMode === 'rotate') {
-        if (dragTarget === rotateCircleX) imagePlane.rotation.z -= dx * 0.01
-        if (dragTarget === rotateCircleY) imagePlane.rotation.x -= dy * 0.01
-        if (dragTarget === rotateCircleZ) imagePlane.rotation.y -= dx * 0.01
+        if (dragTarget === rotateCircleZ) imagePlane.rotation.z += dx * 0.01
+        if (dragTarget === rotateCircleY) imagePlane.rotation.y += dx * 0.01
       }
 
       prevMouse.x = event.clientX
@@ -202,15 +163,7 @@ export function addFloorplanToScene({
     if (resizeHandle) resizeHandle.visible = isResize
     if (moveArrowX) moveArrowX.visible = isMove
     if (moveArrowY) moveArrowY.visible = isMove
-    if (rotateCircleX) rotateCircleX.visible = isRotate
     if (rotateCircleZ) rotateCircleZ.visible = isRotate
     if (rotateCircleY) rotateCircleY.visible = isRotate
   }
-
-  function updateResizeHandlePosition() {
-    if (!resizeHandle || !imagePlane) return
-
-    resizeHandle.position.set(originalWidth / 2, -originalHeight / 2, 0.01)
-  }
-
 }

@@ -38,7 +38,6 @@ import * as PANOLENS from 'panolens'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader'
 import axios from 'axios'
-import { addFloorplanToScene } from '../utils/floorplanEditor'
 
 const container = ref(null)
 const panoramaContainer = ref(null)
@@ -295,16 +294,39 @@ const loadCameraPoses = async () => {
     console.error('pose 로딩 실패:', err)
   }
 }
-function loadFloorplan() {
-  addFloorplanToScene({
-    scene,
-    camera,
-    controls,
-    renderer,
-    container: container.value,
-    pointCloudMinZ,
-    pointCloudCenter
-  }, '/floorplans/office_plan.png')
+
+const loadFloorplan = async () => {
+  const geometry = new THREE.PlaneGeometry(10, 5)
+  const texture = await new Promise((resolve, reject) => {
+    new THREE.TextureLoader().load('/floorplans/office_plan.png', resolve, undefined, reject)
+  })
+
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false
+  })
+
+  floor = new THREE.Mesh(geometry, material)
+  floor.rotation.x = 0
+  floor.position.set(0, 0, pointCloudMinZ - pointCloudCenter.z)
+  scene.add(floor)
+
+  const handleGeo = new THREE.BoxGeometry(0.3, 0.3, 0.1)
+
+  resizeHandle = new THREE.Mesh(handleGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }))
+  resizeHandle.position.set(5, -2.5, 0.01)
+  floor.add(resizeHandle)
+
+  moveHandle = new THREE.Mesh(handleGeo, new THREE.MeshBasicMaterial({ color: 0x00ff00 }))
+  moveHandle.position.set(0, 0, 0.01)
+  floor.add(moveHandle)
+
+  rotateHandle = new THREE.Mesh(handleGeo, new THREE.MeshBasicMaterial({ color: 0x0000ff }))
+  rotateHandle.position.set(-5, 2.5, 0.01)
+  floor.add(rotateHandle)
 }
 </script>
 
