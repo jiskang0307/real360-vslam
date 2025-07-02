@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import * as dat from 'dat.gui'
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
 
 export function addFloorplanToScene({
   scene,
@@ -11,159 +12,71 @@ export function addFloorplanToScene({
   pointCloudCenter = new THREE.Vector3(),
   texturePath = '/floorplans/office_plan.png'
 }) {
-  let dragging = false
-  let draggingMode = 'none'
-  let prevMouse = { x: 0, y: 0 }
-  let dragTarget = null
-  let imagePlane = null
-  let resizeHandle = null
-  let moveArrowX = null
-  let moveArrowY = null
-  let rotateCircleZ = null
-  let rotateCircleY = null
-
   const textureLoader = new THREE.TextureLoader()
+
   textureLoader.load(texturePath, (texture) => {
-    const aspect = texture.image.width / texture.image.height
-    const height = 2
-    const width = height * aspect
+    const img = texture.image
+    const imageAspect = img.naturalWidth / img.naturalHeight
+    const height = 10
+    const width = height * imageAspect
 
     const geometry = new THREE.PlaneGeometry(width, height)
     const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true })
-    imagePlane = new THREE.Mesh(geometry, material)
+    const imagePlane = new THREE.Mesh(geometry, material)
     imagePlane.position.set(0, 0, pointCloudMinZ - pointCloudCenter.z)
     scene.add(imagePlane)
 
-    const handleGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1)
+    // 🌟 TransformControls 추가
+    const transformControls = new TransformControls(camera, renderer.domElement)
+    transformControls.attach(imagePlane)
+    scene.add(transformControls)
 
-    resizeHandle = new THREE.Mesh(handleGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }))
-    resizeHandle.position.set(width / 2, -height / 2, 0.01)
-    imagePlane.add(resizeHandle)
+    // OrbitControls와 충돌 방지
+    transformControls.addEventListener('dragging-changed', (event) => {
+      controls.enabled = !event.value
+    })
 
-    moveArrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0.01), 1, 0x00ff00)
-    moveArrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0.01), 1, 0x0000ff)
-    imagePlane.add(moveArrowX)
-    imagePlane.add(moveArrowY)
+    // 🛠 dat.GUI 구성
+    const gui = new dat.GUI({ width: 220 })
+    gui.domElement.style.position = 'absolute'
+    gui.domElement.style.top = '100px'
+    gui.domElement.style.right = '10px'
+    gui.domElement.style.zIndex = '100'
+    container.appendChild(gui.domElement)
 
-    const ringGeoZ = new THREE.RingGeometry(0.6, 0.65, 64)
-    const ringMatZ = new THREE.MeshBasicMaterial({ color: 0xff00ff, side: THREE.DoubleSide })
-    rotateCircleZ = new THREE.Mesh(ringGeoZ, ringMatZ)
-    rotateCircleZ.rotation.x = Math.PI / 2 // XY 평면 기준
-    rotateCircleZ.position.set(0, 0, 0.01)
-    imagePlane.add(rotateCircleZ)
-
-    const ringGeoY = new THREE.RingGeometry(0.7, 0.75, 64)
-    const ringMatY = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide })
-    rotateCircleY = new THREE.Mesh(ringGeoY, ringMatY)
-    rotateCircleY.rotation.y = Math.PI / 2 // Y축 회전 기준
-    rotateCircleY.position.set(0, 0, 0.01)
-    imagePlane.add(rotateCircleY)
-
-    updateToolVisibility()
-  })
-
-  const raycaster = new THREE.Raycaster()
-  const mouse = new THREE.Vector2()
-
-  renderer.domElement.addEventListener('pointerdown', (event) => {
-    if (!imagePlane) return
-    const rect = renderer.domElement.getBoundingClientRect()
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
-    raycaster.setFromCamera(mouse, camera)
-
-    const interactiveObjects = []
-    if (draggingMode === 'resize' && resizeHandle) interactiveObjects.push(resizeHandle)
-    if (draggingMode === 'move') {
-      if (moveArrowX) interactiveObjects.push(moveArrowX.cone)
-      if (moveArrowY) interactiveObjects.push(moveArrowY.cone)
-    }
-    if (draggingMode === 'rotate') {
-      if (rotateCircleZ) interactiveObjects.push(rotateCircleZ)
-      if (rotateCircleY) interactiveObjects.push(rotateCircleY)
+    const state = {
+      mode: 'translate',
+      space: 'local',
+      camera2D: false
     }
 
-    const intersects = raycaster.intersectObjects(interactiveObjects)
-    if (intersects.length > 0) {
-      dragging = true
-      dragTarget = intersects[0].object
-      controls.enabled = false
-      prevMouse.x = event.clientX
-      prevMouse.y = event.clientY
-    }
-  })
+    gui.add(state, 'mode', ['translate', 'rotate', 'scale']).name('Transform Mode').onChange(val => {
+      transformControls.setMode(val)
+    })
 
-  renderer.domElement.addEventListener('pointerup', () => {
-    dragging = false
-    dragTarget = null
-    controls.enabled = true
-  })
+    gui.add(state, 'space', ['local', 'world']).name('Coord Space').onChange(val => {
+      transformControls.setSpace(val)
+    })
 
-  renderer.domElement.addEventListener('pointermove', (event) => {
-    if (dragging && imagePlane && dragTarget) {
-      const dx = event.clientX - prevMouse.x
-      const dy = event.clientY - prevMouse.y
-
-      if (draggingMode === 'resize') {
-        imagePlane.scale.x += dx * 0.01
-        imagePlane.scale.y -= dy * 0.01
-        imagePlane.scale.z = 1
-      } else if (draggingMode === 'move') {
-        if (dragTarget === moveArrowX.cone) imagePlane.position.x += dx * 0.01
-        if (dragTarget === moveArrowY.cone) imagePlane.position.y -= dy * 0.01
-      } else if (draggingMode === 'rotate') {
-        if (dragTarget === rotateCircleZ) imagePlane.rotation.z += dx * 0.01
-        if (dragTarget === rotateCircleY) imagePlane.rotation.y += dx * 0.01
+    gui.add(state, 'camera2D').name('2D View').onChange(enabled => {
+      if (enabled) {
+        camera.position.set(0, 0, 10)
+        camera.up.set(0, 1, 0)
+        camera.lookAt(0, 0, 0)
+        controls.enableRotate = false
+        controls.enablePan = false
+        controls.enableZoom = true
+        controls.object.position.set(0, 0, 10)
+        controls.target.set(0, 0, 0)
+      } else {
+        controls.enableRotate = true
+        controls.enablePan = true
+        controls.enableZoom = true
       }
+    })
 
-      prevMouse.x = event.clientX
-      prevMouse.y = event.clientY
-    }
+    // 초기 설정 적용
+    transformControls.setMode(state.mode)
+    transformControls.setSpace(state.space)
   })
-
-  const gui = new dat.GUI({ width: 220 })
-  gui.domElement.style.position = 'absolute'
-  gui.domElement.style.top = '100px'
-  gui.domElement.style.right = '10px'
-  gui.domElement.style.zIndex = '100'
-  container.appendChild(gui.domElement)
-
-  const state = {
-    mode: 'None',
-    camera2D: false
-  }
-
-  gui.add(state, 'mode', ['None', 'Move', 'Rotate', 'Resize']).name('Tool Mode').onChange(val => {
-    draggingMode = val.toLowerCase()
-    updateToolVisibility()
-  })
-
-  gui.add(state, 'camera2D').name('2D View').onChange(enabled => {
-    if (enabled) {
-      camera.position.set(0, 0, 10)
-      camera.up.set(0, 1, 0)
-      camera.lookAt(0, 0, 0)
-      controls.enableRotate = false
-      controls.enablePan = false
-      controls.enableZoom = true
-      controls.object.position.set(0, 0, 10)
-      controls.target.set(0, 0, 0)
-    } else {
-      controls.enableRotate = true
-      controls.enablePan = true
-      controls.enableZoom = true
-    }
-  })
-
-  function updateToolVisibility() {
-    const isResize = draggingMode === 'resize'
-    const isMove = draggingMode === 'move'
-    const isRotate = draggingMode === 'rotate'
-
-    if (resizeHandle) resizeHandle.visible = isResize
-    if (moveArrowX) moveArrowX.visible = isMove
-    if (moveArrowY) moveArrowY.visible = isMove
-    if (rotateCircleZ) rotateCircleZ.visible = isRotate
-    if (rotateCircleY) rotateCircleY.visible = isRotate
-  }
 }
