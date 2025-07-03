@@ -27,6 +27,10 @@ export function addFloorplanToScene({
   let imageAspect = 1
   let originalWidth = 1
   let originalHeight = 1
+  let originalCameraUp = camera.up.clone()
+  let originalCameraPos = camera.position.clone()
+  let originalControlsTarget = controls.target.clone()
+
 
   const textureLoader = new THREE.TextureLoader()
   textureLoader.load(texturePath, (texture) => {
@@ -182,15 +186,26 @@ export function addFloorplanToScene({
       camera.position.set(0, 0, 10)
       camera.up.set(0, 1, 0)
       camera.lookAt(0, 0, 0)
+
+      controls.target.set(0, 0, 0)
       controls.enableRotate = false
       controls.enablePan = false
       controls.enableZoom = true
-      controls.object.position.set(0, 0, 10)
-      controls.target.set(0, 0, 0)
+      controls.minPolarAngle = 0
+      controls.maxPolarAngle = 0
+      controls.update()
     } else {
+      camera.position.copy(originalCameraPos)
+      camera.up.copy(originalCameraUp)
+      camera.lookAt(originalControlsTarget)
+
+      controls.target.copy(originalControlsTarget)
       controls.enableRotate = true
       controls.enablePan = true
       controls.enableZoom = true
+      controls.minPolarAngle = 0
+      controls.maxPolarAngle = Math.PI / 2
+      controls.update()
     }
   })
 
