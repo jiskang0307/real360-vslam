@@ -15,7 +15,7 @@ app.get('/api/poses', async (req, res) => {
   try {
     const pool = await poolPromise
     const result = await pool.request().query(`
-      SELECT id, x, y, z, qx, qy, qz, qw
+      SELECT id, tx, ty, tz, qx, qy, qz, qw
       FROM CameraPoses
       ORDER BY id
     `)
