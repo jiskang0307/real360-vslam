@@ -1,0 +1,199 @@
+<template>
+  <div ref="container" style="width: 100%; height: 80vh; background: black; position: relative;"></div>
+</template>
+
+<script setup>
+import { ref, onMounted, nextTick, onBeforeUnmount, defineExpose } from 'vue'
+import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader'
+import { addFloorplanToScene } from '../utils/floorplanEditor'
+
+const emit = defineEmits(['sphere-selected'])
+const container = ref(null)
+let scene, camera, renderer, controls
+let floor = null
+let pointCloudCenter = new THREE.Vector3()
+let pointCloudMinZ = 0
+let selectedSphere = null
+let resizeHandle = null
+let moveHandle = null
+let rotateHandle = null
+let dragging = false
+let draggingMode = null
+let prevMouse = { x: 0, y: 0 }
+
+function isTopView(camera) {
+  const dir = new THREE.Vector3()
+  camera.getWorldDirection(dir)
+  return Math.abs(dir.x) < 0.3 && Math.abs(dir.y) < 0.3 && dir.z < -0.9
+}
+
+onMounted(async () => {
+  await nextTick()
+  emit('loading', true)
+  scene = new THREE.Scene()
+  camera = new THREE.PerspectiveCamera(75, container.value.clientWidth / container.value.clientHeight, 0.01, 1000)
+  camera.up.set(0, 0, 1)
+
+  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setSize(container.value.clientWidth, container.value.clientHeight)
+  renderer.setClearColor(0x111111)
+  container.value.appendChild(renderer.domElement)
+
+  controls = new OrbitControls(camera, renderer.domElement)
+  controls.enableDamping = true
+  controls.dampingFactor = 0.15
+  controls.enableZoom = true
+  controls.enablePan = true
+  controls.minPolarAngle = 0
+  controls.maxPolarAngle = Math.PI / 2
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5))
+
+  const loader = new PLYLoader()
+  loader.load('/pointclouds/sample_8k.ply', (geometry) => {
+    geometry.computeVertexNormals()
+    geometry.computeBoundingBox()
+    const center = new THREE.Vector3()
+    geometry.boundingBox.getCenter(center)
+    pointCloudCenter.copy(center)
+    pointCloudMinZ = geometry.boundingBox.min.z
+
+    const material = new THREE.PointsMaterial({ size: 0.01, vertexColors: true })
+    const pointCloud = new THREE.Points(geometry, material)
+    pointCloud.position.sub(center)
+    pointCloud.rotation.x = -Math.PI / 2
+    scene.add(pointCloud)
+
+    camera.position.set(0, 0, 20)
+    camera.lookAt(0, 0, 0)
+    controls.target.set(0, 0, 0)
+    emit('loading', false)
+  }, undefined, (err) => {
+    console.error('PLY 로딩 실패:', err)
+  })
+
+  const raycaster = new THREE.Raycaster()
+  const mouse = new THREE.Vector2()
+
+  renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (!resizeHandle || !moveHandle || !rotateHandle) return
+    const rect = renderer.domElement.getBoundingClientRect()
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+    raycaster.setFromCamera(mouse, camera)
+    const intersects = raycaster.intersectObjects([resizeHandle, moveHandle, rotateHandle])
+    if (intersects.length > 0) {
+      dragging = true
+      draggingMode = intersects[0].object === resizeHandle ? 'resize' : intersects[0].object === rotateHandle ? 'rotate' : 'move'
+      controls.enabled = false
+      prevMouse.x = event.clientX
+      prevMouse.y = event.clientY
+    }
+  })
+
+  renderer.domElement.addEventListener('pointerup', () => {
+    dragging = false
+    draggingMode = null
+    controls.enabled = true
+  })
+
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (dragging && floor) {
+      const dx = event.clientX - prevMouse.x
+      const dy = event.clientY - prevMouse.y
+
+      if (draggingMode === 'resize') {
+        const delta = (dx - dy) * 0.005
+        floor.scale.x += delta
+        floor.scale.y += delta
+        floor.scale.z = 1
+      } else if (draggingMode === 'move') {
+        floor.position.x += dx * 0.01
+        floor.position.y -= dy * 0.01
+      } else if (draggingMode === 'rotate') {
+        floor.rotation.z += dx * 0.01
+      }
+
+      prevMouse.x = event.clientX
+      prevMouse.y = event.clientY
+    }
+  })
+
+  renderer.domElement.addEventListener('dblclick', (event) => {
+    const rect = renderer.domElement.getBoundingClientRect()
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+    raycaster.setFromCamera(mouse, camera)
+    const redSpheres = scene.children.filter(obj => obj.isMesh && obj.material?.color?.getHex() === 0xff0000)
+
+    const intersects = raycaster.intersectObjects(redSpheres)
+    if (intersects.length > 0) {
+      const hit = intersects[0].object
+
+      if (selectedSphere) {
+        selectedSphere.material.color.set(0xff0000)
+      }
+
+      hit.material.color.set(0xffff00)
+      selectedSphere = hit
+
+      const { imagePath } = hit.userData
+      emit('sphere-selected', hit.userData.index, imagePath)
+    }
+  })
+
+  const animate = () => {
+    requestAnimationFrame(animate)
+    controls.update()
+    renderer.render(scene, camera)
+    if (resizeHandle) resizeHandle.visible = isTopView(camera)
+  }
+  animate()
+})
+
+function renderCameraPoses(poses) {
+  const sphereGeo = new THREE.SphereGeometry(0.1, 16, 16)
+  const rotMatrix = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
+
+  for (let i = 0; i < poses.length; i++) {
+    const { x, y, z } = poses[i]
+    const originalPos = new THREE.Vector3(x, y, z)
+    const rotatedPos = originalPos.clone().applyMatrix4(rotMatrix).sub(pointCloudCenter)
+    const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 })
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat)
+    sphere.position.copy(rotatedPos)
+    sphere.userData = { index: i, imagePath: `/images/keyframe_${i}.jpg` }
+    scene.add(sphere)
+
+    if (i < poses.length - 1) {
+      const next = poses[i + 1]
+      const nextPos = new THREE.Vector3(next.x, next.y, next.z)
+        .applyMatrix4(rotMatrix)
+        .sub(pointCloudCenter)
+
+      const dir = new THREE.Vector3().subVectors(nextPos, rotatedPos)
+      const length = dir.length()
+      if (length > 0) {
+        const arrow = new THREE.ArrowHelper(dir.clone().normalize(), rotatedPos, length, 0x0000ff)
+        scene.add(arrow)
+      }
+    }
+  }
+}
+
+function addFloorplan(imagePath) {
+  addFloorplanToScene({
+    scene, camera, controls, renderer, container: container.value, pointCloudMinZ, pointCloudCenter
+  }, imagePath)
+}
+
+defineExpose({ renderCameraPoses, addFloorplan })
+
+onBeforeUnmount(() => {
+  renderer.dispose()
+  controls.dispose()
+})
+</script>

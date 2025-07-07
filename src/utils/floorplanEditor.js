@@ -155,8 +155,8 @@ export function addFloorplanToScene({
         }
       } else if (draggingMode === 'rotate') {
         if (dragTarget === rotateCircleX) imagePlane.rotation.z -= dy * 0.01
-        if (dragTarget === rotateCircleY) imagePlane.rotation.x -= dy * 0.01
-        if (dragTarget === rotateCircleZ) imagePlane.rotation.y -= dx * 0.01
+        if (dragTarget === rotateCircleY) imagePlane.rotation.x += dy * 0.01
+        if (dragTarget === rotateCircleZ) imagePlane.rotation.y += dx * 0.01
       }
 
       prevMouse.x = event.clientX
