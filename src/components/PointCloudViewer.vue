@@ -9,7 +9,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader'
 import { addFloorplanToScene } from '../utils/floorplanEditor'
 
-const emit = defineEmits(['sphere-selected'])
+const emit = defineEmits(['sphere-selected', 'loading', 'progress'])
 const container = ref(null)
 let scene, camera, renderer, controls
 let floor = null
@@ -69,9 +69,28 @@ onMounted(async () => {
     camera.position.set(0, 0, 20)
     camera.lookAt(0, 0, 0)
     controls.target.set(0, 0, 0)
-    emit('loading', false)
-  }, undefined, (err) => {
+    let step = 81
+    const interval = setInterval(() => {
+      emit('progress', step)
+      step++
+      if (step >= 100) {
+        clearInterval(interval)
+        emit('loading', false)
+        emit('progress', 100)
+      }
+    }, 20)
+
+    geometry.computeVertexNormals()
+    geometry.computeBoundingBox()
+  }, (xhr) => {
+    if (xhr.lengthComputable) {
+      const percent = Math.round((xhr.loaded / xhr.total) * 80) // max 80%
+      emit('progress', percent)
+    }
+  },
+  (err) => {
     console.error('PLY 로딩 실패:', err)
+    emit('loading', false)
   })
 
   const raycaster = new THREE.Raycaster()

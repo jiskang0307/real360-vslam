@@ -1,8 +1,23 @@
 <template>
-  <div class="q-pa-md" style="position: relative;">
-    <q-inner-loading :showing="isLoading" label="PLY 파일 로딩 중..." class="absolute-full z-top" />
-
-    <PointCloudViewer @sphere-selected="handleSphereSelected"  @loading="isLoading = $event" ref="cloudViewer" />
+  <q-inner-loading :showing="isLoading" class="absolute-full z-top">
+      <div class="text-white text-center">
+        <q-spinner size="50px" color="white" />
+        <div class="q-mt-sm">PLY 파일 로딩 중... {{ progress }}%</div>
+        <q-linear-progress
+          color="white"
+          size="10px"
+          :value="progress / 100"
+          class="q-mt-sm"
+        />
+      </div>
+    </q-inner-loading>
+  <div class="q-pa-md">
+     <PointCloudViewer
+      @sphere-selected="handleSphereSelected"
+      @loading="isLoading = $event"
+      @progress="progress = $event"
+      ref="cloudViewer"
+    />
 
     <div class="q-gutter-sm q-mt-md">
       <q-btn label="도면 불러오기" @click="loadFloorplan" color="primary" />
@@ -23,6 +38,7 @@ const isLoading = ref(false)
 const showingImage = ref(false)
 const currentImagePath = ref('')
 const cloudViewer = ref(null)
+const progress = ref(0)
 
 function handleSphereSelected(index, imagePath) {
   currentImagePath.value = imagePath
