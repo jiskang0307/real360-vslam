@@ -1,5 +1,5 @@
 <template>
-  <div ref="container" style="width: 100%; height: 80vh; background: black; position: relative;"></div>
+  <div ref="container" class="viewer-container"></div>
 </template>
 
 <script setup>
@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader'
 import { addFloorplanToScene } from '../utils/floorplanEditor'
+// import ResizeObserver from 'resize-observer-polyfill'
 
 const emit = defineEmits(['sphere-selected', 'loading', 'progress'])
 const container = ref(null)
@@ -209,10 +210,80 @@ function addFloorplan(imagePath) {
   }, imagePath)
 }
 
-defineExpose({ renderCameraPoses, addFloorplan })
+function centerCamera() {
+  if (!camera || !controls) return
+
+  camera.position.set(0, 0, 3)
+  controls.target.set(0, 0, 0)
+  camera.lookAt(0, 0, 0)
+  controls.update()
+}
+
+function centerCameraForPip() {
+  if (!camera || !controls || !container.value || !renderer) return
+
+  // 1. 크기 계산
+  // const width = container.value.clientWidth
+  // const height = container.value.clientHeight
+  renderer.setSize(container.value.clientWidth, container.value.clientHeight)
+  camera.aspect = container.value.clientWidth / container.value.clientHeight
+  camera.updateProjectionMatrix()
+
+
+  // 2. 카메라 위치 설정 (너무 가까우면 벗어남)
+  camera.position.set(0, -2, 2)  // PiP에서도 중심을 포함할 수 있는 적당한 거리
+
+  // 3. 중심 설정
+  controls.target.set(0, 0, 0)
+  camera.lookAt(0, 0, 0)
+  controls.update()
+
+  // 4. 🚨 한 프레임 뒤에 다시 강제 update
+  requestAnimationFrame(() => {
+    controls.update()
+    renderer.render(scene, camera)
+  })
+}
+
+
+function resizeViewer() {
+  if (!container.value || !renderer || !camera) return
+
+  const width = container.value.clientWidth
+  const height = container.value.clientHeight
+
+  renderer.setSize(width, height)
+  camera.aspect = width / height
+  camera.updateProjectionMatrix()
+}
+
+function watchResizeAndCenter() {
+  if (!container.value) return
+
+  const observer = new ResizeObserver(() => {
+    // 실제로 크기가 바뀐 다음에 실행
+    resizeViewer()
+    centerCamera()
+    observer.disconnect() // 한 번만 실행
+  })
+
+  observer.observe(container.value)
+}
+
+defineExpose({ renderCameraPoses, addFloorplan, centerCamera, resizeViewer, centerCameraForPip, watchResizeAndCenter })
 
 onBeforeUnmount(() => {
   renderer.dispose()
   controls.dispose()
 })
 </script>
+
+<style scoped>
+.viewer-container {
+  width: 100%;
+  height: 100%;
+  background: black;
+  position: relative;
+  overflow: hidden;
+}
+</style>

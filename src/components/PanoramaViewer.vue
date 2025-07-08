@@ -5,7 +5,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount, onMounted, nextTick } from 'vue'
 import * as PANOLENS from 'panolens'
 
 const props = defineProps({ imagePath: String })
@@ -17,32 +17,64 @@ function close() {
   emit('close')
 }
 
+async function loadPanorama(path) {
+  // DOM이 아직 준비 안 됐을 수도 있으므로 nextTick 보장
+  await nextTick()
+
+  if (!panoramaContainer.value) return
+
+  if (panolensViewer) {
+    panolensViewer.dispose()
+    panoramaContainer.value.innerHTML = ''
+  }
+
+  const panorama = new PANOLENS.ImagePanorama(path)
+  panolensViewer = new PANOLENS.Viewer({
+    container: panoramaContainer.value,
+    autoRotate: false,
+    controlBar: true
+  })
+  panolensViewer.add(panorama)
+}
+
 watch(() => props.imagePath, (newPath) => {
-  if (newPath) {
-    if (panolensViewer) {
-      panolensViewer.dispose()
-      panoramaContainer.value.innerHTML = ''
-    }
-    const panorama = new PANOLENS.ImagePanorama(newPath)
-    panolensViewer = new PANOLENS.Viewer({ container: panoramaContainer.value, autoRotate: false, controlBar: true })
-    panolensViewer.add(panorama)
+  if (newPath) loadPanorama(newPath)
+})
+
+onMounted(() => {
+  if (props.imagePath) {
+    loadPanorama(props.imagePath)
   }
 })
 
 onBeforeUnmount(() => {
   panolensViewer?.dispose()
 })
+
+
+// watch(() => props.imagePath, (newPath) => {
+//   if (newPath) {
+//     if (panolensViewer) {
+//       panolensViewer.dispose()
+//       panoramaContainer.value.innerHTML = ''
+//     }
+//     const panorama = new PANOLENS.ImagePanorama(newPath)
+//     panolensViewer = new PANOLENS.Viewer({ container: panoramaContainer.value, autoRotate: false, controlBar: true })
+//     panolensViewer.add(panorama)
+//   }
+// })
+
 </script>
 
 <style scoped>
 .shrinked-viewer {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 400px;
-  height: 200px;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 9999;
-  box-shadow: 0 0 10px #000;
-  border: 2px solid #ccc;
+  background-color: #000;
 }
+
 </style>
