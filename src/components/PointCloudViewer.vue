@@ -25,6 +25,7 @@ let dragging = false
 let draggingMode = null
 let prevMouse = { x: 0, y: 0 }
 let fovSector = null
+let fovArrow = null
 
 function isTopView(camera) {
   const dir = new THREE.Vector3()
@@ -275,27 +276,32 @@ function watchResizeAndCenter() {
 
 
 function updateViewingDirection(index, yaw) {
-  // console.log('👀 fovSector added to scene?', scene.children.includes(fovSector), fovSector)
-
   const sphere = scene.children.find(obj => obj.userData?.index === index)
   if (!sphere) {
-    console.warn('❗sphere not found for index', index)
+    console.warn('❗ sphere not found for index', index)
     return
   }
 
-  if (fovSector) {
-    scene.remove(fovSector)
-    fovSector.geometry.dispose()
-    fovSector.material.dispose()
-    fovSector = null
+  // 이전 화살표 제거
+  if (fovArrow) {
+    scene.remove(fovArrow)
+    fovArrow = null
   }
 
-  // 새 부채꼴 생성
-  fovSector = createFovSector(sphere.position, yaw, Math.PI / 3, 1.5)
-  scene.add(fovSector)
+  // yaw -> 방향 벡터로 변환 (z축 기준 yaw)
+  const dir = new THREE.Vector3(Math.cos(yaw), Math.sin(yaw), 0)
 
+  // ArrowHelper 생성
+  fovArrow = new THREE.ArrowHelper(
+    dir.clone().normalize(),     // 방향
+    sphere.position.clone(),     // 시작 위치
+    1.5,                         // 길이
+    0x00ff00                     // 색상 (녹색)
+  )
 
+  scene.add(fovArrow)
 }
+
 defineExpose({ renderCameraPoses, addFloorplan, centerCamera, resizeViewer, centerCameraForPip, watchResizeAndCenter, updateViewingDirection })
 
 onBeforeUnmount(() => {

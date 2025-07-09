@@ -30,4 +30,3 @@ export function createFovSector(origin, yaw, fov = Math.PI / 3, radius = 1.5, se
 
   return mesh
 }
-
