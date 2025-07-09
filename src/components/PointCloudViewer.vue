@@ -9,6 +9,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader'
 import { addFloorplanToScene } from '../utils/floorplanEditor'
 // import ResizeObserver from 'resize-observer-polyfill'
+import { createFovSector } from '../utils/viewDirection'
 
 const emit = defineEmits(['sphere-selected', 'loading', 'progress'])
 const container = ref(null)
@@ -23,6 +24,7 @@ let rotateHandle = null
 let dragging = false
 let draggingMode = null
 let prevMouse = { x: 0, y: 0 }
+let fovSector = null
 
 function isTopView(camera) {
   const dir = new THREE.Vector3()
@@ -213,7 +215,7 @@ function addFloorplan(imagePath) {
 function centerCamera() {
   if (!camera || !controls) return
 
-  camera.position.set(0, 0, 3)
+  camera.position.set(0, 0, 0)
   controls.target.set(0, 0, 0)
   camera.lookAt(0, 0, 0)
   controls.update()
@@ -231,13 +233,14 @@ function centerCameraForPip() {
 
 
   // 2. 카메라 위치 설정 (너무 가까우면 벗어남)
-  camera.position.set(0, -2, 2)  // PiP에서도 중심을 포함할 수 있는 적당한 거리
+  camera.position.set(0, 0, 0)  // PiP에서도 중심을 포함할 수 있는 적당한 거리
 
   // 3. 중심 설정
   controls.target.set(0, 0, 0)
+  camera.up.set(0, 1, 0)
   camera.lookAt(0, 0, 0)
   controls.update()
-
+  controls.enableZoom = true
   // 4. 🚨 한 프레임 뒤에 다시 강제 update
   requestAnimationFrame(() => {
     controls.update()
@@ -270,7 +273,30 @@ function watchResizeAndCenter() {
   observer.observe(container.value)
 }
 
-defineExpose({ renderCameraPoses, addFloorplan, centerCamera, resizeViewer, centerCameraForPip, watchResizeAndCenter })
+
+function updateViewingDirection(index, yaw) {
+  // console.log('👀 fovSector added to scene?', scene.children.includes(fovSector), fovSector)
+
+  const sphere = scene.children.find(obj => obj.userData?.index === index)
+  if (!sphere) {
+    console.warn('❗sphere not found for index', index)
+    return
+  }
+
+  if (fovSector) {
+    scene.remove(fovSector)
+    fovSector.geometry.dispose()
+    fovSector.material.dispose()
+    fovSector = null
+  }
+
+  // 새 부채꼴 생성
+  fovSector = createFovSector(sphere.position, yaw, Math.PI / 3, 1.5)
+  scene.add(fovSector)
+
+
+}
+defineExpose({ renderCameraPoses, addFloorplan, centerCamera, resizeViewer, centerCameraForPip, watchResizeAndCenter, updateViewingDirection })
 
 onBeforeUnmount(() => {
   renderer.dispose()

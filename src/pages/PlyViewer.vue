@@ -26,6 +26,7 @@
       v-show="showingImage"
       :imagePath="currentImagePath"
       @close="showingImage = false"
+      @view-direction="handleViewDirection"
     />
 
     <div class="q-gutter-sm q-mt-md">
@@ -47,11 +48,12 @@ const showingImage = ref(false)
 const currentImagePath = ref('')
 const cloudViewer = ref(null)
 const progress = ref(0)
-
+const currentYaw = ref(0)
+const selectedIndex = ref(0)
 
 async function handleSphereSelected(index, imagePath) {
   const wasAlreadyInPip = showingImage.value
-
+  selectedIndex.value = index
   currentImagePath.value = imagePath
   showingImage.value = true
 
@@ -66,6 +68,14 @@ async function handleSphereSelected(index, imagePath) {
   }
 }
 
+function handleViewDirection(yaw) {
+  // console.log('📌 handleViewDirection:', yaw)
+  currentYaw.value = yaw
+  if (showingImage.value) {
+    const correctedYaw = yaw + Math.PI / 2
+    cloudViewer.value?.updateViewingDirection(selectedIndex.value, correctedYaw)
+  }
+}
 
 
 
@@ -87,6 +97,8 @@ async function loadCameraPoses() {
     console.error('pose 로딩 실패:', err)
   }
 }
+
+
 </script>
 
 <style scoped>
@@ -108,5 +120,6 @@ async function loadCameraPoses() {
   box-shadow: 0 0 10px #000;
   transition: all 0.4s ease;
   opacity: 0.7;
+  pointer-events: auto;
 }
 </style>
