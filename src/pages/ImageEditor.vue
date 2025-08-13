@@ -39,7 +39,7 @@ onMounted(() => {
 
 
   const textureLoader = new THREE.TextureLoader();
-  textureLoader.load('/floorplans/office_plan.png', (texture) => {
+  textureLoader.load('/floorplans/nav_deck.png', (texture) => {
     const aspect = texture.image.width / texture.image.height;
     const height = 2;
     const width = height * aspect;

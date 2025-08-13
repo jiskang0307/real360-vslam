@@ -9,7 +9,7 @@ export function addFloorplanToScene({
   container,
   pointCloudMinZ = 0,
   pointCloudCenter = new THREE.Vector3(),
-  texturePath = '/floorplans/office_plan.png'
+  texturePath = '/floorplans/nav_deck.png'
 }) {
   let dragging = false
   let draggingMode = 'none'

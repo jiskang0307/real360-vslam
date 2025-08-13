@@ -26,6 +26,7 @@ let draggingMode = null
 let prevMouse = { x: 0, y: 0 }
 let fovSector = null
 let fovArrow = null
+let currentArrowIndex = null // 현재 화살표가 표시된 sphere의 index 추적
 
 function isTopView(camera) {
   const dir = new THREE.Vector3()
@@ -56,7 +57,7 @@ onMounted(async () => {
   scene.add(new THREE.AmbientLight(0xffffff, 0.5))
 
   const loader = new PLYLoader()
-  loader.load('/pointclouds/sample_8k.ply', (geometry) => {
+  loader.load('/pointclouds/nav_deck_cfr.ply', (geometry) => {
     geometry.computeVertexNormals()
     geometry.computeBoundingBox()
     const center = new THREE.Vector3()
@@ -164,6 +165,15 @@ onMounted(async () => {
       selectedSphere = hit
 
       const { imagePath } = hit.userData
+      
+      // 화살표 제거 - 새로운 sphere 선택 시 이전 화살표 즉시 제거
+      if (fovArrow) {
+        console.log('🧹 Clearing arrow on sphere selection')
+        scene.remove(fovArrow)
+        fovArrow = null
+        currentArrowIndex = null
+      }
+      
       emit('sphere-selected', hit.userData.index, imagePath)
     }
   })
@@ -188,7 +198,7 @@ function renderCameraPoses(poses) {
     const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 })
     const sphere = new THREE.Mesh(sphereGeo, sphereMat)
     sphere.position.copy(rotatedPos)
-    sphere.userData = { index: i, imagePath: `/images/keyframe_${i}.jpg` }
+    sphere.userData = { index: i, imagePath: `/navdeck_img/keyframe_${i}.jpg` }
     scene.add(sphere)
 
     if (i < poses.length - 1) {
@@ -276,35 +286,73 @@ function watchResizeAndCenter() {
 
 
 function updateViewingDirection(index, yaw) {
-  const sphere = scene.children.find(obj => obj.userData?.index === index)
-  if (!sphere) {
-    console.warn('❗ sphere not found for index', index)
-    return
-  }
-
-  // 이전 화살표 제거
+  console.log(`🔍 updateViewingDirection called - index: ${index}, yaw: ${yaw} radians (${(yaw * 180 / Math.PI).toFixed(1)}°)`)
+  
+  // 이전 화살표가 있다면 제거
   if (fovArrow) {
+    console.log(`🗑️ Removing previous arrow for index: ${currentArrowIndex}`)
     scene.remove(fovArrow)
     fovArrow = null
   }
 
-  // yaw -> 방향 벡터로 변환 (z축 기준 yaw)
-  const dir = new THREE.Vector3(Math.cos(yaw), Math.sin(yaw), 0)
+  // sphere 찾기
+  const sphere = scene.children.find(obj => obj.userData?.index === index)
+  if (!sphere) {
+    console.warn(`❗ Sphere not found for index ${index}`)
+    currentArrowIndex = null
+    return
+  }
 
-  // ArrowHelper 생성
-  fovArrow = new THREE.ArrowHelper(
-    dir.clone().normalize(),     // 방향
-    sphere.position.clone(),     // 시작 위치
-    1.5,                         // 길이
-    0x00ff00                     // 색상 (녹색)
+  // 왼쪽 회전 시 yaw 증가 → 화살표도 왼쪽으로 회전해야 함
+  // 현재 반대로 동작하므로 yaw를 그대로 사용
+  const dir = new THREE.Vector3(
+    Math.cos(yaw),
+    Math.sin(yaw),
+    0
   )
 
-  scene.add(fovArrow)
+  // ArrowHelper 생성
+  const arrowLength = 2.0
+  const arrowColor = 0x00ff00
+  const headLength = 0.4
+  const headWidth = 0.3
+  
+  // 새로운 ArrowHelper 인스턴스 생성
+  const newArrow = new THREE.ArrowHelper(
+    dir.normalize(),
+    sphere.position.clone(),
+    arrowLength,
+    arrowColor,
+    headLength,
+    headWidth
+  )
+
+  // scene에 추가
+  scene.add(newArrow)
+  fovArrow = newArrow
+  
+  // 현재 index 저장
+  currentArrowIndex = index
+  
+  // 강제 렌더링
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera)
+  }
+  
+  console.log(`✅ New arrow created for sphere ${index}`)
+  console.log(`   Yaw: ${(yaw * 180 / Math.PI).toFixed(1)}°`)
+  console.log(`   Direction vector: (${dir.x.toFixed(2)}, ${dir.y.toFixed(2)}, ${dir.z.toFixed(2)})`)
 }
 
 defineExpose({ renderCameraPoses, addFloorplan, centerCamera, resizeViewer, centerCameraForPip, watchResizeAndCenter, updateViewingDirection })
 
 onBeforeUnmount(() => {
+  // 화살표 정리
+  if (fovArrow) {
+    scene.remove(fovArrow)
+    fovArrow = null
+  }
+  
   renderer.dispose()
   controls.dispose()
 })

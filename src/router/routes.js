@@ -27,7 +27,7 @@ const routes = [
     path: '/img',
     component: () => import('layouts/MainLayout.vue'),
     children: [
-      { path: '', component: () => import('pages/ImageEditor.vue') }
+      { path: '', component: () => import('pages/MainViewerPage.vue') }
     ]
   },
 

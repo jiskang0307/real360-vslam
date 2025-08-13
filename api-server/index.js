@@ -16,7 +16,7 @@ app.get('/api/poses', async (req, res) => {
     const pool = await poolPromise
     const result = await pool.request().query(`
       SELECT id, tx, ty, tz, qx, qy, qz, qw
-      FROM CameraPoses
+      FROM NavDeck
       ORDER BY id
     `)
     res.json(result.recordset)
@@ -26,6 +26,6 @@ app.get('/api/poses', async (req, res) => {
   }
 })
 
-app.listen(3001, () => {
-  console.log('🚀 API 서버 실행 중: http://localhost:3001')
+app.listen(3002, () => {
+  console.log('🚀 API 서버 실행 중: http://localhost:3002')
 })
